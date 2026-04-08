@@ -1,6 +1,24 @@
 import git from 'isomorphic-git';
 import fs from 'fs';
+import { GIT_FILE_STATUS, GIT_STATUS_CODE } from '../constants.js';
 
+/**
+ * Collect all git changes since the last ingestion baseline.
+ * Walks committed diffs (tree comparison) and working-tree status.
+ *
+ * @param {string} targetPath - Absolute path to the repository root
+ * @param {string|null} baselineTimestamp - SQLite datetime string ('YYYY-MM-DD HH:MM:SS') or null for all history
+ * @returns {Promise<{
+ *   changedFiles: Array<{path: string, status: string}>,
+ *   fileAuthors: Map<string, string[]>,
+ *   commits: Array<{hash: string, message: string, author: string, timestamp: string}>,
+ *   fromCommitHash: string|null,
+ *   toCommitHash: string,
+ *   meta: {warnings: string[]},
+ *   error?: string,
+ *   errorDetail?: string
+ * }>}
+ */
 export async function getGitChanges(targetPath, baselineTimestamp) {
   try {
     const toCommitHash = await git.resolveRef({ fs, dir: targetPath, ref: 'HEAD' });
@@ -65,16 +83,17 @@ export async function getGitChanges(targetPath, baselineTimestamp) {
       }
     }
 
-    // Also check working-tree uncommitted changes
+    // Also check working-tree uncommitted changes.
+    // statusMatrix returns [filepath, HEAD_code, workdir_code, stage_code].
+    // GIT_STATUS_CODE values are isomorphic-git internal constants — DO NOT CHANGE.
     const statusMatrix = await git.statusMatrix({ fs, dir: targetPath });
-    for (const [filepath, head, workdir, stage] of statusMatrix) {
-      // head: 0=absent, 1=present; workdir: 0=absent, 1=identical, 2=modified
-      if (head === 0 && workdir === 2) {
-        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, 'added');
-      } else if (head === 1 && workdir === 0) {
-        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, 'deleted');
-      } else if (head === 1 && workdir === 2) {
-        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, 'modified');
+    for (const [filepath, head, workdir] of statusMatrix) {
+      if (head === GIT_STATUS_CODE.ABSENT && workdir === GIT_STATUS_CODE.MODIFIED) {
+        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, GIT_FILE_STATUS.ADDED);
+      } else if (head === GIT_STATUS_CODE.PRESENT && workdir === GIT_STATUS_CODE.ABSENT) {
+        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, GIT_FILE_STATUS.DELETED);
+      } else if (head === GIT_STATUS_CODE.PRESENT && workdir === GIT_STATUS_CODE.MODIFIED) {
+        if (!changedFilesMap.has(filepath)) changedFilesMap.set(filepath, GIT_FILE_STATUS.MODIFIED);
       }
     }
 

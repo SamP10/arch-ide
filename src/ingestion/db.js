@@ -1,6 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 
+// @[SCHEMA_CHANGE] — any change to column names, types, or table names here requires:
+//   1. Bumping the query strings in every db.js helper that references those columns
+//   2. Updating the corresponding constant in src/constants.js (status enums)
+//   3. Updating the session queries in src/session/index.js
+// CREATE TABLE IF NOT EXISTS is intentional — openDb() is idempotent on existing DBs.
+// DO NOT change to plain CREATE TABLE — it would break resume/incremental runs.
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,

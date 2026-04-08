@@ -33,12 +33,18 @@ const LANGUAGE_MAP = {
   '.bash': 'bash',
 };
 
+// DO NOT remove entries from HARD_EXCLUDE_DIRS without explicit justification.
+// These prevent: infinite loops (symlinked node_modules), scanning binary/generated
+// artefacts (dist, build), and indexing VCS internals (.git). Removing any entry
+// will silently bloat the file index and may cause the walker to loop.
 const HARD_EXCLUDE_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt',
   'coverage', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env',
   'vendor', 'target', '.gradle', '.idea', '.vscode',
 ]);
 
+// Patterns for generated/minified files that are never worth parsing.
+// Checked before .gitignore rules for performance — these are cheap regex tests.
 const HARD_EXCLUDE_PATTERNS = [
   '**/*.min.js',
   '**/*.min.css',
@@ -51,6 +57,8 @@ const HARD_EXCLUDE_PATTERNS = [
 
 function isBinary(filePath) {
   try {
+    // 512 bytes — standard heuristic for binary detection (covers most file magic numbers).
+    // Reading more would slow down large repos; reading less misses some binary formats.
     const buffer = Buffer.alloc(512);
     const fd = fs.openSync(filePath, 'r');
     const bytesRead = fs.readSync(fd, buffer, 0, 512, 0);

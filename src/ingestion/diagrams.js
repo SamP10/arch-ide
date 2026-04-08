@@ -1,8 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 import { getAllFiles, getFilesInCluster, insertDiagram } from './db.js';
+import { DIAGRAM_TYPE } from '../constants.js';
 
+// Files with hotspot_score >= 2 are highlighted in diagrams.
+// Score equals number of other files that import this file (computed in graph.js).
+// Threshold of 2 was chosen to surface files with at least 2 dependents — low enough
+// to catch real hotspots in small repos, without flooding diagrams in large ones.
+// @[RELEASE] — if you change this, also check improvement.js which uses the same threshold.
 const HOTSPOT_THRESHOLD = 2;
+
+// Cap the call graph at 20 nodes to keep Mermaid diagrams readable.
+// Beyond ~25 nodes, most diagram renderers produce unreadable output.
 const MAX_CALL_GRAPH_NODES = 20;
 
 function sanitizeId(str) {
@@ -160,9 +169,9 @@ export function generateDiagrams(db, runId, archDir, graphData) {
   const hotspotFileIds = new Set(files.filter(f => f.hotspot_score >= HOTSPOT_THRESHOLD).map(f => f.id));
   const depsEdges = resolvedEdges.filter(e => hotspotFileIds.has(e.from_file_id) || hotspotFileIds.has(e.to_file_id));
 
-  insertDiagram(db, { run_id: runId, type: 'arch', content: archMmd, node_count: clusters.length, edge_count: crossClusterEdges.length, filter_threshold: null });
-  insertDiagram(db, { run_id: runId, type: 'deps', content: depsMmd, node_count: hotspotFileIds.size, edge_count: depsEdges.length, filter_threshold: HOTSPOT_THRESHOLD });
-  insertDiagram(db, { run_id: runId, type: 'calls', content: callsMmd, node_count: Math.min(files.length, MAX_CALL_GRAPH_NODES), edge_count: null, filter_threshold: MAX_CALL_GRAPH_NODES });
+  insertDiagram(db, { run_id: runId, type: DIAGRAM_TYPE.ARCH,  content: archMmd, node_count: clusters.length, edge_count: crossClusterEdges.length, filter_threshold: null });
+  insertDiagram(db, { run_id: runId, type: DIAGRAM_TYPE.DEPS,  content: depsMmd, node_count: hotspotFileIds.size, edge_count: depsEdges.length, filter_threshold: HOTSPOT_THRESHOLD });
+  insertDiagram(db, { run_id: runId, type: DIAGRAM_TYPE.CALLS, content: callsMmd, node_count: Math.min(files.length, MAX_CALL_GRAPH_NODES), edge_count: null, filter_threshold: MAX_CALL_GRAPH_NODES });
 
   return { archMmd, depsMmd, callsMmd };
 }

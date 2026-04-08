@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { getAllFiles, getAllClusters, getFilesInCluster, getAllImports, insertHypothesis } from './db.js';
+import { HYPOTHESIS_STATUS } from '../constants.js';
 
 const LayerSchema = z.object({
   name: z.string(),
@@ -150,7 +151,7 @@ export async function generateHypothesis(db, runId, graphData, diagrams, model, 
   const id = insertHypothesis(db, {
     run_id: runId,
     raw_response_json: JSON.stringify(validated),
-    status: 'pending_validation',
+    status: HYPOTHESIS_STATUS.PENDING_VALIDATION,
   });
 
   return { id, ...validated };

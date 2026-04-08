@@ -1,5 +1,16 @@
 import chalk from 'chalk';
+import { SIGNAL_SEVERITY, SESSION_MODE, GIT_FILE_STATUS } from '../constants.js';
 
+/**
+ * Build the structured JSON session report.
+ *
+ * @param {object|null} baseline - Latest completed run row from DB, or null
+ * @param {object} gitChanges - Output of getGitChanges()
+ * @param {object} archImpact - Output of mapChangesToArchitecture()
+ * @param {Array} driftSignals - Output of detectDrift()
+ * @param {{mode: string, warnings: string[]}} meta - Session mode and accumulated warnings
+ * @returns {{generated_at: string, baseline_run: object|null, summary: object, layers: Array, unassigned_changes: Array, drift_signals: Array, git_context: object, meta: object}}
+ */
 export function buildReport(baseline, gitChanges, archImpact, driftSignals, meta) {
   const allAuthors = new Set();
   for (const layer of archImpact.layers) {
@@ -11,7 +22,7 @@ export function buildReport(baseline, gitChanges, archImpact, driftSignals, meta
   // Also collect from git commits
   for (const c of gitChanges.commits) allAuthors.add(c.author);
 
-  const hasDrift = driftSignals.some(s => s.severity === 'critical' || s.severity === 'warning');
+  const hasDrift = driftSignals.some(s => s.severity === SIGNAL_SEVERITY.CRITICAL || s.severity === SIGNAL_SEVERITY.WARNING);
 
   return {
     generated_at: new Date().toISOString(),
@@ -46,15 +57,15 @@ export function formatHumanReadable(report) {
 
   // Summary
   const s = report.summary;
-  const modeLabel = report.meta.mode !== 'normal' ? chalk.yellow(` [${report.meta.mode}]`) : '';
+  const modeLabel = report.meta.mode !== SESSION_MODE.NORMAL ? chalk.yellow(` [${report.meta.mode}]`) : '';
   lines.push('');
   lines.push(
     chalk.bold('  Summary') + modeLabel
   );
 
-  if (report.meta.mode === 'no_git') {
+  if (report.meta.mode === SESSION_MODE.NO_GIT) {
     lines.push(chalk.yellow('  ⚠  No git repository detected — cannot surface changes.'));
-  } else if (report.meta.mode === 'first_run') {
+  } else if (report.meta.mode === SESSION_MODE.FIRST_RUN) {
     lines.push(chalk.yellow('  ⚠  No previous ingestion run found. Run arch-ingest first.'));
   } else {
     lines.push(
@@ -89,7 +100,7 @@ export function formatHumanReadable(report) {
         lines.push(chalk.gray(`  Authors: ${layer.authors.join(', ')}`));
       }
       for (const f of layer.files) {
-        const statusColor = f.status === 'added' ? chalk.green : f.status === 'deleted' ? chalk.red : chalk.yellow;
+        const statusColor = f.status === GIT_FILE_STATUS.ADDED ? chalk.green : f.status === GIT_FILE_STATUS.DELETED ? chalk.red : chalk.yellow;
         lines.push(`    ${statusColor(f.status.padEnd(8))}  ${f.path}`);
       }
     }
@@ -111,12 +122,12 @@ export function formatHumanReadable(report) {
     lines.push(chalk.bold('  Drift Signals'));
     for (const sig of report.drift_signals) {
       const icon =
-        sig.severity === 'critical' ? chalk.red('✖') :
-        sig.severity === 'warning' ? chalk.yellow('⚠') :
+        sig.severity === SIGNAL_SEVERITY.CRITICAL ? chalk.red('✖') :
+        sig.severity === SIGNAL_SEVERITY.WARNING  ? chalk.yellow('⚠') :
         chalk.blue('ℹ');
       const label =
-        sig.severity === 'critical' ? chalk.red(sig.severity) :
-        sig.severity === 'warning' ? chalk.yellow(sig.severity) :
+        sig.severity === SIGNAL_SEVERITY.CRITICAL ? chalk.red(sig.severity) :
+        sig.severity === SIGNAL_SEVERITY.WARNING  ? chalk.yellow(sig.severity) :
         chalk.blue(sig.severity);
       lines.push(`  ${icon} ${label.padEnd(12)}  ${sig.message}`);
     }

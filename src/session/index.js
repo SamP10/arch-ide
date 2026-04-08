@@ -4,6 +4,7 @@ import { getGitChanges } from './git.js';
 import { mapChangesToArchitecture } from './diff.js';
 import { detectDrift } from './drift.js';
 import { buildReport, formatHumanReadable } from './report.js';
+import { SESSION_MODE, HYPOTHESIS_STATUS } from '../constants.js';
 
 export async function runSessionStart(targetPath, options = {}) {
   const archDir = getArchDir(targetPath);
@@ -14,18 +15,19 @@ export async function runSessionStart(targetPath, options = {}) {
   ).get();
 
   const hypothesisRow = db.prepare(
-    `SELECT validated_json FROM hypotheses WHERE status = 'validated' ORDER BY id DESC LIMIT 1`
-  ).get();
+    // @[SCHEMA_CHANGE] — update if hypotheses table columns change
+    `SELECT validated_json FROM hypotheses WHERE status = ? ORDER BY id DESC LIMIT 1`
+  ).get(HYPOTHESIS_STATUS.VALIDATED);
 
-  const meta = { mode: 'normal', warnings: [] };
-  if (!baseline) meta.mode = 'first_run';
+  const meta = { mode: SESSION_MODE.NORMAL, warnings: [] };
+  if (!baseline) meta.mode = SESSION_MODE.FIRST_RUN;
 
   const hypothesis = hypothesisRow ? JSON.parse(hypothesisRow.validated_json) : null;
-  if (!hypothesis && meta.mode !== 'first_run') meta.mode = 'no_hypothesis';
+  if (!hypothesis && meta.mode !== SESSION_MODE.FIRST_RUN) meta.mode = SESSION_MODE.NO_HYPOTHESIS;
 
   const gitChanges = await getGitChanges(targetPath, baseline?.completed_at);
   if (gitChanges.error === 'no_git') {
-    meta.mode = 'no_git';
+    meta.mode = SESSION_MODE.NO_GIT;
   }
   if (gitChanges.meta?.warnings?.length) {
     meta.warnings.push(...gitChanges.meta.warnings);

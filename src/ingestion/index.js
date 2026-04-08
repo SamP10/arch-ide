@@ -1,6 +1,7 @@
 import ora from 'ora';
 import chalk from 'chalk';
 import { initRun, writeHypothesisFiles } from './state.js';
+import { HYPOTHESIS_STATUS } from '../constants.js';
 import { markStageComplete, getCompletedStages, markRunComplete } from './db.js';
 import { walkFiles } from './walker.js';
 import { parseFiles } from './parser.js';
@@ -10,6 +11,10 @@ import { generateHypothesis } from './claude.js';
 import { validateHypothesis } from './hypothesis.js';
 import { runImprovement } from './improvement.js';
 
+// DO NOT reorder STAGES — the resume logic in initRun()/getCompletedStages() depends
+// on this order to determine which stages to skip. Add new stages at the end only.
+// @[RELEASE] — if a stage is added or renamed, existing in-progress runs will be
+// incompatible with the new stage list. Document the migration in the release notes.
 const STAGES = [
   'walk_files',
   'parse_files',
@@ -127,7 +132,7 @@ export async function runIngestion(targetPath, options = {}) {
   if (!shouldSkip('validate', completedStages)) {
     try {
       const result = await validateHypothesis(db, hypothesisId, hypothesis);
-      if (result.status === 'validated') {
+      if (result.status === HYPOTHESIS_STATUS.VALIDATED) {
         hypothesis = result.hypothesis;
         markStageComplete(db, runId, 'validate');
       } else {
