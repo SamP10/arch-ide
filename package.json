@@ -7,7 +7,8 @@
     "arch-ingest": "scripts/ingest.js"
   },
   "scripts": {
-    "ingest": "node --experimental-sqlite scripts/ingest.js"
+    "ingest": "node --experimental-sqlite scripts/ingest.js",
+    "session": "node --experimental-sqlite scripts/session-start.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

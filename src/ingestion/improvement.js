@@ -37,6 +37,7 @@ function buildFileLayerMap(hypothesis, db) {
 // Generate the arch comment block for a file
 function buildArchComment(language, layerInfo, fileRecord) {
   const { layerName, clusterId, responsibility } = layerInfo;
+  // Threshold must match HOTSPOT_THRESHOLD in diagrams.js — @[RELEASE] if either changes.
   const isHotspot = fileRecord.hotspot_score >= 2;
 
   if (language === 'python') {

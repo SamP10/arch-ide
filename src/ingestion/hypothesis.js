@@ -1,6 +1,7 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { updateHypothesis } from './db.js';
+import { HYPOTHESIS_STATUS, CORRECTION_TYPE } from '../constants.js';
 
 function displayHypothesis(hypothesis) {
   console.log('\n' + chalk.bold('═'.repeat(60)));
@@ -83,7 +84,7 @@ async function correctionLoop(hypothesis) {
         message: 'New name:',
         default: h.layers[layerIdx].name,
       }]);
-      corrections.push({ type: 'rename_layer', old_name: h.layers[layerIdx].name, new_name: newName, cluster_ids: h.layers[layerIdx].cluster_ids });
+      corrections.push({ type: CORRECTION_TYPE.RENAME_LAYER, old_name: h.layers[layerIdx].name, new_name: newName, cluster_ids: h.layers[layerIdx].cluster_ids });
       h.layers[layerIdx].name = newName;
 
     } else if (action === 'responsibility') {
@@ -99,7 +100,7 @@ async function correctionLoop(hypothesis) {
         message: 'Responsibility:',
         default: h.layers[layerIdx].responsibility,
       }]);
-      corrections.push({ type: 'set_responsibility', layer_name: h.layers[layerIdx].name, responsibility: resp });
+      corrections.push({ type: CORRECTION_TYPE.SET_RESPONSIBILITY, layer_name: h.layers[layerIdx].name, responsibility: resp });
       h.layers[layerIdx].responsibility = resp;
 
     } else if (action === 'reassign_cluster') {
@@ -114,7 +115,7 @@ async function correctionLoop(hypothesis) {
         message: 'Move to which layer?',
         choices: h.layers.map((l, i) => ({ name: l.name, value: i })),
       }]);
-      corrections.push({ type: 'reassign_cluster', cluster_id: clusterId, to_layer: h.layers[targetLayerIdx].name });
+      corrections.push({ type: CORRECTION_TYPE.REASSIGN_CLUSTER, cluster_id: clusterId, to_layer: h.layers[targetLayerIdx].name });
       // Remove from existing layer
       for (const layer of h.layers) {
         layer.cluster_ids = layer.cluster_ids.filter(c => c !== clusterId);
@@ -126,7 +127,7 @@ async function correctionLoop(hypothesis) {
         { type: 'input', name: 'name', message: 'Layer name:' },
         { type: 'input', name: 'responsibility', message: 'Responsibility:' },
       ]);
-      corrections.push({ type: 'add_layer', name, responsibility });
+      corrections.push({ type: CORRECTION_TYPE.ADD_LAYER, name, responsibility });
       h.layers.push({ name, cluster_ids: [], responsibility, key_files: [], interfaces_with: [] });
 
     } else if (action === 'remove_layer') {
@@ -136,7 +137,7 @@ async function correctionLoop(hypothesis) {
         message: 'Which layer to remove?',
         choices: h.layers.map((l, i) => ({ name: l.name, value: i })),
       }]);
-      corrections.push({ type: 'remove_layer', name: h.layers[layerIdx].name });
+      corrections.push({ type: CORRECTION_TYPE.REMOVE_LAYER, name: h.layers[layerIdx].name });
       h.layers.splice(layerIdx, 1);
 
     } else if (action === 'arch_style') {
@@ -146,7 +147,7 @@ async function correctionLoop(hypothesis) {
         message: 'Architecture style:',
         default: h.architecture_style,
       }]);
-      corrections.push({ type: 'set_arch_style', style });
+      corrections.push({ type: CORRECTION_TYPE.SET_ARCH_STYLE, style });
       h.architecture_style = style;
 
     } else if (action === 'entry_points') {
@@ -157,7 +158,7 @@ async function correctionLoop(hypothesis) {
         default: h.entry_points.join(', '),
       }]);
       h.entry_points = eps.split(',').map(s => s.trim()).filter(Boolean);
-      corrections.push({ type: 'set_entry_points', entry_points: h.entry_points });
+      corrections.push({ type: CORRECTION_TYPE.SET_ENTRY_POINTS, entry_points: h.entry_points });
     }
 
     console.log();
@@ -182,9 +183,9 @@ export async function validateHypothesis(db, hypothesisId, hypothesis) {
   }]);
 
   if (choice === 'skip') {
-    updateHypothesis(db, hypothesisId, { status: 'skipped' });
+    updateHypothesis(db, hypothesisId, { status: HYPOTHESIS_STATUS.SKIPPED });
     console.log(chalk.dim('\nHypothesis saved as draft. Re-run with --resume to validate later.\n'));
-    return { status: 'skipped', hypothesis };
+    return { status: HYPOTHESIS_STATUS.SKIPPED, hypothesis };
   }
 
   let finalHypothesis = hypothesis;
@@ -203,19 +204,19 @@ export async function validateHypothesis(db, hypothesisId, hypothesis) {
     }]);
 
     if (!confirm) {
-      updateHypothesis(db, hypothesisId, { status: 'skipped' });
+      updateHypothesis(db, hypothesisId, { status: HYPOTHESIS_STATUS.SKIPPED });
       console.log(chalk.dim('\nHypothesis saved as draft.\n'));
-      return { status: 'skipped', hypothesis: finalHypothesis };
+      return { status: HYPOTHESIS_STATUS.SKIPPED, hypothesis: finalHypothesis };
     }
   }
 
   updateHypothesis(db, hypothesisId, {
-    status: 'validated',
+    status: HYPOTHESIS_STATUS.VALIDATED,
     validated_json: JSON.stringify(finalHypothesis),
     corrections_json: JSON.stringify(corrections),
     corrected_at: corrections.length > 0 ? new Date().toISOString() : null,
   });
 
   console.log(chalk.green('\n✓ Hypothesis committed as source of truth.\n'));
-  return { status: 'validated', hypothesis: finalHypothesis, corrections };
+  return { status: HYPOTHESIS_STATUS.VALIDATED, hypothesis: finalHypothesis, corrections };
 }
